@@ -302,7 +302,7 @@ function fmtDateFull(d) { return new Date(d + "T12:00:00").toLocaleDateString("e
 function useRestTimer() {
   const [active, setActive] = useState(false);
   const [seconds, setSeconds] = useState(120);
-  const [total, setTotal] = useState(120);
+  const [total, setTotal] = useState(120); /* eslint-disable-line */
   const intervalRef = useRef(null);
   const start = useCallback((duration = 120) => { setTotal(duration); setSeconds(duration); setActive(true); }, []);
   const dismiss = useCallback(() => { setActive(false); clearInterval(intervalRef.current); }, []);
@@ -386,6 +386,7 @@ export default function App() {
   const HomeView = () => {
     const latest = measurements[measurements.length - 1];
     const first = measurements[0];
+    const streak = 0; // TODO: calculate from consecutive days
 
     return (
       <div>
@@ -559,7 +560,7 @@ export default function App() {
       setSaving(false);
     }
 
-    const _totalSets = wkt.exercises.reduce((a, e) => a + e.sets.length, 0); // eslint-disable-line
+    const totalSets = wkt.exercises.reduce((a, e) => a + e.sets.length, 0);
 
     return (
       <div>
