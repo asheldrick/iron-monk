@@ -558,7 +558,7 @@ export default function App() {
       setSaving(false);
     }
 
-    const _totalSets = wkt.exercises.reduce((a, e) => a + e.sets.length, 0); // eslint-disable-line
+    const __totalSets = wkt.exercises.reduce((a, e) => a + e.sets.length, 0); // eslint-disable-line
 
     return (
       <div>
@@ -684,9 +684,9 @@ export default function App() {
           </div>
           <div style={{ display: "flex", gap: 8, paddingBottom: 8 }}>
             <button className="im-btn-ghost" style={{ flex: 1 }} onClick={() => { setActiveWorkout(null); setView("home"); }}>Discard</button>
-            <button className="im-btn-primary" style={{ flex: 2, opacity: totalSets === 0 || saving ? 0.5 : 1 }}
-              onClick={handleSave} disabled={totalSets === 0 || saving}>
-              {saving ? "Saving..." : `Save Session (${totalSets} sets)`}
+            <button className="im-btn-primary" style={{ flex: 2, opacity: _totalSets === 0 || saving ? 0.5 : 1 }}
+              onClick={handleSave} disabled={_totalSets === 0 || saving}>
+              {saving ? "Saving..." : `Save Session (${_totalSets} sets)`}
             </button>
           </div>
         </div>
