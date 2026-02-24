@@ -385,7 +385,6 @@ export default function App() {
   const HomeView = () => {
     const latest = measurements[measurements.length - 1];
     const first = measurements[0];
-    const streak = 0; // TODO: calculate from consecutive days
 
     return (
       <div>
@@ -559,7 +558,7 @@ export default function App() {
       setSaving(false);
     }
 
-    const totalSets = wkt.exercises.reduce((a, e) => a + e.sets.length, 0);
+    const totalSets = wkt.exercises.reduce((a, e) => a + e.sets.length, 0); // eslint-disable-line
 
     return (
       <div>
