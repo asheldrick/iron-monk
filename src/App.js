@@ -558,7 +558,7 @@ export default function App() {
       setSaving(false);
     }
 
-    const totalSets = wkt.exercises.reduce((a, e) => a + e.sets.length, 0); // eslint-disable-line
+    const _totalSets = wkt.exercises.reduce((a, e) => a + e.sets.length, 0); // eslint-disable-line
 
     return (
       <div>
