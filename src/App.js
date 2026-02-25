@@ -571,6 +571,28 @@ function HomeView({ workouts, measurements, onStartWorkout, onEditWorkout }) {
   const first = measurements[0];
   const recentWorkouts = workouts.slice(0, 5);
 
+  // Day overrides — keyed by day name, value is muscle group to swap in
+  const [dayOverrides, setDayOverrides] = useState({});
+  const [showSwapFor, setShowSwapFor] = useState(null); // which day is showing the dropdown
+
+  function getPlanForDay(day) {
+    const override = dayOverrides[day];
+    if (override) {
+      // Find the plan from WEEKLY_PLAN that matches the overridden muscle
+      const match = Object.values(WEEKLY_PLAN).find(p => p.muscle === override);
+      return match ? { ...match, overridden: true } : WEEKLY_PLAN[day];
+    }
+    return WEEKLY_PLAN[day];
+  }
+
+  function setDayOverride(day, muscle) {
+    setDayOverrides(prev => ({ ...prev, [day]: muscle === "default" ? undefined : muscle }));
+    setShowSwapFor(null);
+  }
+
+  // All available muscle options (unique from WEEKLY_PLAN)
+  const muscleOptions = [...new Set(Object.values(WEEKLY_PLAN).map(p => p.muscle))];
+
   return (
     <div>
       <div className="im-header">
@@ -612,14 +634,15 @@ function HomeView({ workouts, measurements, onStartWorkout, onEditWorkout }) {
           <div className="im-section-title">This Week</div>
           <div className="im-week">
             {DAYS_ORDER.map(day => {
-              const plan = WEEKLY_PLAN[day];
+              const plan = getPlanForDay(day);
               const isToday = day === today;
               const done = completedDays.includes(day);
+              const overridden = !!dayOverrides[day];
               return (
                 <div key={day} className={`im-day${done ? " done" : ""}${isToday ? " today" : ""}`}
-                  onClick={() => !done && onStartWorkout(day)}>
+                  onClick={() => !done && onStartWorkout(day, getPlanForDay(day))}>
                   <div className="im-day-name">{day.slice(0, 3)}</div>
-                  <div className="im-day-muscle">{plan.muscle.slice(0, 4)}</div>
+                  <div className="im-day-muscle">{plan.muscle.slice(0, 4)}{overridden ? "*" : ""}</div>
                   <div className="im-day-check">{done ? "✓" : isToday ? "→" : "·"}</div>
                 </div>
               );
@@ -630,35 +653,82 @@ function HomeView({ workouts, measurements, onStartWorkout, onEditWorkout }) {
         <div className="im-section">
           <div className="im-section-title">Today's Programme</div>
           {(() => {
-            const plan = WEEKLY_PLAN[today] || WEEKLY_PLAN["Monday"];
+            const plan = getPlanForDay(today) || WEEKLY_PLAN["Monday"];
             const done = completedDays.includes(today);
             const volSets = weeklyVolume(workouts, plan.muscle);
+            const overridden = !!dayOverrides[today];
             return (
               <div className="im-card-accent">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                  <div>
-                    <div className="im-card-title">{plan.muscle} Day</div>
+                  <div style={{ flex: 1, marginRight: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
+                      <div className="im-card-title">{plan.muscle} Day</div>
+                      {overridden && (
+                        <span style={{ fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: "var(--copper)", border: "1px solid var(--copper)", borderRadius: 2, padding: "2px 6px" }}>Swapped</span>
+                      )}
+                    </div>
                     <div className="im-card-sub">{plan.focus}</div>
                   </div>
-                  {!done
-                    ? <button className="im-btn-copper" onClick={() => onStartWorkout(today)}>Begin</button>
-                    : <span style={{ fontSize: 11, color: "var(--success)", border: "1px solid var(--success)", borderRadius: 2, padding: "4px 10px", letterSpacing: 1 }}>Done ✓</span>
-                  }
+                  <div style={{ display: "flex", gap: 6, alignItems: "flex-start", flexShrink: 0 }}>
+                    {!done && (
+                      <button
+                        onClick={() => setShowSwapFor(showSwapFor === today ? null : today)}
+                        style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 2, padding: "8px 12px", fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-muted)", cursor: "pointer", fontFamily: "var(--ff-body)", fontWeight: 600 }}>
+                        ⇄ Swap
+                      </button>
+                    )}
+                    {!done
+                      ? <button className="im-btn-copper" onClick={() => onStartWorkout(today, plan)}>Begin</button>
+                      : <span style={{ fontSize: 11, color: "var(--success)", border: "1px solid var(--success)", borderRadius: 2, padding: "8px 12px", letterSpacing: 1 }}>Done ✓</span>
+                    }
+                  </div>
                 </div>
+
+                {/* Swap dropdown */}
+                {showSwapFor === today && (
+                  <div style={{ background: "var(--parchment)", border: "1px solid var(--copper)", borderRadius: 2, marginBottom: 12, overflow: "hidden" }}>
+                    <div style={{ padding: "8px 12px", fontSize: 10, letterSpacing: 2, textTransform: "uppercase", color: "var(--text-muted)", borderBottom: "1px solid var(--border-light)", fontWeight: 600 }}>
+                      Replace {today}'s workout with:
+                    </div>
+                    {muscleOptions.map(muscle => {
+                      const matchPlan = Object.values(WEEKLY_PLAN).find(p => p.muscle === muscle);
+                      const isDefault = WEEKLY_PLAN[today]?.muscle === muscle;
+                      const isSelected = (dayOverrides[today] || WEEKLY_PLAN[today]?.muscle) === muscle;
+                      return (
+                        <div key={muscle}
+                          onClick={() => setDayOverride(today, isDefault ? "default" : muscle)}
+                          style={{
+                            padding: "12px 14px", cursor: "pointer", borderBottom: "1px solid var(--border-light)",
+                            background: isSelected ? "var(--copper-pale)" : "transparent",
+                            display: "flex", justifyContent: "space-between", alignItems: "center"
+                          }}>
+                          <div>
+                            <div style={{ fontSize: 14, color: "var(--espresso)", fontWeight: isSelected ? 700 : 500 }}>
+                              {muscle}{isDefault ? " (default)" : ""}
+                            </div>
+                            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>{matchPlan?.focus}</div>
+                          </div>
+                          {isSelected && <span style={{ color: "var(--copper)", fontSize: 16 }}>✓</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 <div className="im-divider" />
-                <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8, fontStyle: "italic" }}>{plan.note}</div>
+                <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8, fontStyle: "italic" }}>{plan.note}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                   {plan.exercises.map((ex, i) => <span key={i} className="im-chip active" style={{ cursor: "default" }}>{ex}</span>)}
                 </div>
                 <div className="im-divider" />
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div className="im-stat-label">Weekly Volume — {plan.muscle}</div>
-                  <div style={{ fontSize: 11, color: volSets >= 10 ? "var(--success)" : "var(--copper)" }}>{volSets} / 12 sets</div>
+                  <div style={{ fontSize: 12, color: volSets >= 10 ? "var(--success)" : "var(--copper)", fontWeight: 600 }}>{volSets} / 12 sets</div>
                 </div>
                 <div className="im-vol-bar" style={{ marginTop: 6 }}>
                   <div className="im-vol-fill" style={{ width: `${Math.min(100, (volSets / 20) * 100)}%`, background: volSets >= 10 ? "var(--success)" : "var(--copper)" }} />
                 </div>
-                <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 4, letterSpacing: 1 }}>Target: 10–20 sets / week</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 4, letterSpacing: 1 }}>Target: 10–20 sets / week</div>
               </div>
             );
           })()}
@@ -1288,9 +1358,9 @@ export default function App() {
     loadData();
   }, []);
 
-  function startWorkout(day) {
-    const plan = WEEKLY_PLAN[day];
-    const lastSimilar = workouts.filter(w => w.day === day)[0];
+  function startWorkout(day, planOverride) {
+    const plan = planOverride || WEEKLY_PLAN[day];
+    const lastSimilar = workouts.filter(w => w.muscleGroup === plan.muscle || w.muscle_group === plan.muscle)[0];
     const newWorkout = {
       id: `w${Date.now()}`, date: todayStr(), day, muscleGroup: plan.muscle, notes: "",
       exercises: plan.exercises.map(name => {
