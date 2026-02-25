@@ -386,7 +386,6 @@ export default function App() {
   const HomeView = () => {
     const latest = measurements[measurements.length - 1];
     const first = measurements[0];
-    const streak = 0; // TODO: calculate from consecutive days
 
     return (
       <div>
@@ -514,9 +513,11 @@ export default function App() {
 
   // ── LOG VIEW ────────────────────────────────────────────────────────────────
   const LogView = () => {
-    const [wkt, setWkt] = useState(activeWorkout || { id: `w${Date.now()}`, date: todayStr(), day: today, muscleGroup: "Chest", notes: "", exercises: [] });
+    const initWkt = activeWorkout || { id: `w${Date.now()}`, date: todayStr(), day: today, muscleGroup: "Chest", notes: "", exercises: [] };
+    const [wkt, setWkt] = useState(initWkt);
     const [showPicker, setShowPicker] = useState(false);
-    const [pickerGroup, setPickerGroup] = useState(wkt.muscleGroup);
+    const [swapIndex, setSwapIndex] = useState(null);
+    const [pickerGroup, setPickerGroup] = useState(initWkt.muscleGroup);
     const [saving, setSaving] = useState(false);
     const [elapsed, setElapsed] = useState(0);
     const startRef = useRef(Date.now());
@@ -530,7 +531,17 @@ export default function App() {
       const lastSimilar = workouts.filter(w => w.day === wkt.day)[0];
       const lastEx = lastSimilar?.exercises.find(e => e.name === ex.name);
       const recWeight = lastEx ? Math.max(...lastEx.sets.map(s => parseFloat(s.weight) || 0)) : getBaseWeight(ex.name);
-      setWkt(prev => ({ ...prev, exercises: [...prev.exercises, { name: ex.name, recWeight, sets: [] }] }));
+      if (swapIndex !== null) {
+        // Swap existing exercise
+        setWkt(prev => {
+          const exs = JSON.parse(JSON.stringify(prev.exercises));
+          exs[swapIndex] = { name: ex.name, recWeight, sets: [] };
+          return { ...prev, exercises: exs };
+        });
+        setSwapIndex(null);
+      } else {
+        setWkt(prev => ({ ...prev, exercises: [...prev.exercises, { name: ex.name, recWeight, sets: [] }] }));
+      }
       setShowPicker(false);
     }
 
@@ -549,6 +560,14 @@ export default function App() {
       setWkt(prev => {
         const exs = JSON.parse(JSON.stringify(prev.exercises));
         exs[ei].sets[si][field] = val;
+        return { ...prev, exercises: exs };
+      });
+    }
+
+    function removeExercise(ei) {
+      setWkt(prev => {
+        const exs = JSON.parse(JSON.stringify(prev.exercises));
+        exs.splice(ei, 1);
         return { ...prev, exercises: exs };
       });
     }
@@ -614,11 +633,21 @@ export default function App() {
             return (
               <div key={ei} className="im-card" style={{ marginBottom: 14 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <div className="im-card-title" style={{ color: "var(--copper)" }}>{ex.name}</div>
                     <div className="im-card-sub">Rec. start: {ex.recWeight}lb</div>
                   </div>
-                  {strengthLevel && <span className={`im-strength-badge ${strengthBadgeClass(strengthLevel)}`}>{strengthLevel}</span>}
+                  <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                    {strengthLevel && <span className={`im-strength-badge ${strengthBadgeClass(strengthLevel)}`}>{strengthLevel}</span>}
+                    <button onClick={() => { setSwapIndex(ei); setShowPicker(true); }}
+                      style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 2, padding: "3px 8px", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-muted)", cursor: "pointer" }}>
+                      Swap
+                    </button>
+                    <button onClick={() => removeExercise(ei)}
+                      style={{ background: "transparent", border: "1px solid var(--danger)", borderRadius: 2, padding: "3px 8px", fontSize: 9, color: "var(--danger)", cursor: "pointer" }}>
+                      ✕
+                    </button>
+                  </div>
                 </div>
                 {warmups.length > 0 && (
                   <div className="im-warmup">
@@ -663,17 +692,19 @@ export default function App() {
           })}
 
           {!showPicker
-            ? <button className="im-btn-add" onClick={() => setShowPicker(true)}>+ Add Exercise</button>
+            ? <button className="im-btn-add" onClick={() => { setSwapIndex(null); setShowPicker(true); }}>+ Add Exercise</button>
             : (
               <div className="im-picker">
-                <div className="im-section-title" style={{ marginBottom: 10 }}>Select — {pickerGroup}</div>
+                <div className="im-section-title" style={{ marginBottom: 10 }}>
+                  {swapIndex !== null ? `Swap: ${wkt.exercises[swapIndex]?.name}` : `Add Exercise`} — {pickerGroup}
+                </div>
                 {EXERCISE_LIBRARY[pickerGroup].map((ex, i) => (
                   <div key={i} className="im-picker-item" onClick={() => addExercise(ex)}>
                     <span>{ex.name}{ex.primary ? " ★" : ""}</span>
                     <span className="rec">{getBaseWeight(ex.name) > 0 ? `~${getBaseWeight(ex.name)}lb` : "BW"} ›</span>
                   </div>
                 ))}
-                <button className="im-btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => setShowPicker(false)}>Cancel</button>
+                <button className="im-btn-ghost" style={{ width: "100%", marginTop: 8 }} onClick={() => { setShowPicker(false); setSwapIndex(null); }}>Cancel</button>
               </div>
             )
           }
