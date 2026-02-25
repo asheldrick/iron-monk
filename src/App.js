@@ -187,16 +187,35 @@ const DAYS_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Sat
 // ─── UTILS ────────────────────────────────────────────────────────────────────
 function getBaseWeight(name) { return BASE_WEIGHTS[name] || 95; }
 function calc1RM(weight, reps) { if (reps <= 1) return weight; return Math.round(weight * (1 + reps / 30)); }
-function getStrengthLevel(exercise, weight, bw) {
-  const ratio = weight / bw;
-  const t = exercise.includes("Deadlift") || exercise.includes("Squat")
-    ? { novice: 1.0, intermediate: 1.5, advanced: 2.0, elite: 2.5 }
-    : exercise.includes("Bench") || exercise.includes("Press")
-    ? { novice: 0.75, intermediate: 1.0, advanced: 1.5, elite: 2.0 }
-    : { novice: 0.5, intermediate: 0.75, advanced: 1.0, elite: 1.5 };
-  if (ratio >= t.elite) return "Elite";
-  if (ratio >= t.advanced) return "Advanced";
-  if (ratio >= t.intermediate) return "Intermediate";
+// Absolute lb standards for ~200lb male (from Symmetric Strength / ExRx)
+const STRENGTH_STANDARDS = {
+  "Barbell Back Squat":       { novice: 175, intermediate: 255, advanced: 340, elite: 425 },
+  "Romanian Deadlift":        { novice: 155, intermediate: 225, advanced: 300, elite: 375 },
+  "Barbell Deadlift":         { novice: 205, intermediate: 300, advanced: 395, elite: 490 },
+  "Rack Pull":                { novice: 225, intermediate: 325, advanced: 425, elite: 525 },
+  "Barbell Bench Press":      { novice: 135, intermediate: 200, advanced: 270, elite: 340 },
+  "Incline Barbell Press":    { novice: 115, intermediate: 175, advanced: 235, elite: 300 },
+  "Decline Barbell Press":    { novice: 145, intermediate: 215, advanced: 285, elite: 360 },
+  "Close-Grip Bench Press":   { novice: 120, intermediate: 185, advanced: 250, elite: 315 },
+  "Barbell Overhead Press":   { novice: 85,  intermediate: 130, advanced: 175, elite: 220 },
+  "Barbell Row":              { novice: 115, intermediate: 175, advanced: 235, elite: 295 },
+  "Barbell Curl":             { novice: 65,  intermediate: 100, advanced: 135, elite: 170 },
+  "Skull Crushers":           { novice: 75,  intermediate: 115, advanced: 155, elite: 195 },
+  "Leg Press":                { novice: 215, intermediate: 330, advanced: 450, elite: 565 },
+  "Hack Squat":               { novice: 175, intermediate: 270, advanced: 365, elite: 455 },
+  "Hip Thrust":               { novice: 175, intermediate: 265, advanced: 360, elite: 450 },
+};
+function getStrengthLevel(exercise, weight) {
+  const s = STRENGTH_STANDARDS[exercise];
+  if (!s) {
+    // Generic fallback for unlisted exercises
+    if (weight >= 225) return "Advanced";
+    if (weight >= 135) return "Intermediate";
+    return "Novice";
+  }
+  if (weight >= s.elite) return "Elite";
+  if (weight >= s.advanced) return "Advanced";
+  if (weight >= s.intermediate) return "Intermediate";
   return "Novice";
 }
 function strengthBadgeClass(level) {
@@ -349,7 +368,6 @@ function LogView({ activeWorkout, workouts, onSave, onDiscard, timer }) {
       });
       return { ...prev, exercises: exs };
     });
-    timer.start(120);
   }
 
   function updateSet(ei, si, field, val) {
@@ -413,7 +431,7 @@ function LogView({ activeWorkout, workouts, onSave, onDiscard, timer }) {
           const lastEx = lastSimilar?.exercises.find(e => e.name === ex.name);
           const topSet = ex.sets.length > 0 ? [...ex.sets].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0] : null;
           const est1RM = topSet?.reps && topSet?.weight ? calc1RM(parseFloat(topSet.weight), parseInt(topSet.reps)) : null;
-          const strengthLevel = topSet?.weight ? getStrengthLevel(ex.name, parseFloat(topSet.weight), USER.weight) : null;
+          const strengthLevel = topSet?.weight ? getStrengthLevel(ex.name, parseFloat(topSet.weight)) : null;
           const rec = getProgressionRec(lastEx?.sets);
           const warmupHint = ex.sets.length === 0 ? getWarmupHint(ex.recWeight) : null;
 
@@ -458,29 +476,38 @@ function LogView({ activeWorkout, workouts, onSave, onDiscard, timer }) {
                     <div className="im-set-col-label">Fail</div>
                   </div>
                   {ex.sets.map((s, si) => (
-                    <div key={si} className="im-set-row">
-                      <div className="im-set-num">{si + 1}</div>
-                      <input
-                        type="number"
-                        className="im-input"
-                        style={{ textAlign: "center", padding: "8px 4px" }}
-                        value={s.reps}
-                        onChange={e => updateSet(ei, si, "reps", e.target.value)}
-                        placeholder="0"
-                      />
-                      <input
-                        type="number"
-                        className="im-input"
-                        style={{ textAlign: "center", padding: "8px 4px" }}
-                        value={s.weight}
-                        onChange={e => updateSet(ei, si, "weight", e.target.value)}
-                        placeholder="0"
-                      />
-                      <button
-                        className={`im-fail-btn${s.toFailure ? " active" : ""}`}
-                        onClick={() => updateSet(ei, si, "toFailure", !s.toFailure)}>
-                        F
-                      </button>
+                    <div key={si}>
+                      <div className="im-set-row">
+                        <div className="im-set-num">{si + 1}</div>
+                        <input
+                          type="number"
+                          className="im-input"
+                          style={{ textAlign: "center", padding: "8px 4px" }}
+                          value={s.reps}
+                          onChange={e => updateSet(ei, si, "reps", e.target.value)}
+                          placeholder="0"
+                        />
+                        <input
+                          type="number"
+                          className="im-input"
+                          style={{ textAlign: "center", padding: "8px 4px" }}
+                          value={s.weight}
+                          onChange={e => updateSet(ei, si, "weight", e.target.value)}
+                          placeholder="0"
+                        />
+                        <button
+                          className={`im-fail-btn${s.toFailure ? " active" : ""}`}
+                          onClick={() => updateSet(ei, si, "toFailure", !s.toFailure)}>
+                          F
+                        </button>
+                      </div>
+                      {si === ex.sets.length - 1 && (
+                        <button
+                          onClick={() => timer.start(120)}
+                          style={{ width: "100%", background: "var(--espresso)", color: "var(--copper)", border: "none", borderRadius: 2, padding: "7px 10px", fontSize: 9, letterSpacing: 2, textTransform: "uppercase", cursor: "pointer", fontFamily: "var(--ff-body)", marginBottom: 8 }}>
+                          ⏱ Start Rest Timer
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -537,7 +564,7 @@ function LogView({ activeWorkout, workouts, onSave, onDiscard, timer }) {
 }
 
 // ─── HOME VIEW ────────────────────────────────────────────────────────────────
-function HomeView({ workouts, measurements, onStartWorkout }) {
+function HomeView({ workouts, measurements, onStartWorkout, onEditWorkout }) {
   const today = todayDay();
   const completedDays = workouts.filter(w => w.date === todayStr()).map(w => w.day);
   const latest = measurements[measurements.length - 1];
@@ -653,10 +680,16 @@ function HomeView({ workouts, measurements, onStartWorkout }) {
                     <div className="im-card-title" style={{ fontSize: 15 }}>{w.day} — {w.muscle_group}</div>
                     <div className="im-card-sub">{fmtDateFull(w.date)}</div>
                   </div>
-                  {orm && <div style={{ textAlign: "right" }}>
-                    <div style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: 1, textTransform: "uppercase" }}>1RM Est.</div>
-                    <div style={{ fontFamily: "var(--ff-display)", fontSize: 18, color: "var(--copper)", fontWeight: 700 }}>{orm}<span style={{ fontSize: 11, color: "var(--text-muted)" }}>lb</span></div>
-                  </div>}
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                    {orm && <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 9, color: "var(--text-muted)", letterSpacing: 1, textTransform: "uppercase" }}>1RM Est.</div>
+                      <div style={{ fontFamily: "var(--ff-display)", fontSize: 18, color: "var(--copper)", fontWeight: 700 }}>{orm}<span style={{ fontSize: 11, color: "var(--text-muted)" }}>lb</span></div>
+                    </div>}
+                    <button onClick={() => onEditWorkout(w)}
+                      style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 2, padding: "3px 10px", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-muted)", cursor: "pointer", fontFamily: "var(--ff-body)" }}>
+                      Edit
+                    </button>
+                  </div>
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
                   {w.exercises.map((ex, i) => <span key={i} className="im-chip" style={{ cursor: "default" }}>{ex.name}</span>)}
@@ -672,7 +705,7 @@ function HomeView({ workouts, measurements, onStartWorkout }) {
 }
 
 // ─── PROGRESS VIEW ────────────────────────────────────────────────────────────
-function ProgressView({ workouts }) {
+function ProgressView({ workouts, onEditWorkout }) {
   const [selectedLift, setSelectedLift] = useState("Barbell Bench Press");
   const [selectedMuscle, setSelectedMuscle] = useState("Chest");
 
@@ -691,7 +724,7 @@ function ProgressView({ workouts }) {
   const latest = liftData[liftData.length - 1];
   const first = liftData[0];
   const topDelta = latest && first ? latest.top - first.top : 0;
-  const strengthLevel = latest?.top ? getStrengthLevel(selectedLift, latest.top, USER.weight) : null;
+  const strengthLevel = latest?.top ? getStrengthLevel(selectedLift, latest.top) : null;
 
   const muscleWorkouts = [...workouts].filter(w => w.muscle_group === selectedMuscle).sort((a, b) => a.date.localeCompare(b.date));
   const volumeData = muscleWorkouts.map(w => ({
@@ -797,9 +830,15 @@ function ProgressView({ workouts }) {
           <div className="im-section-title">Full Session History</div>
           {[...workouts].sort((a, b) => b.date.localeCompare(a.date)).map(w => (
             <div key={w.id} className="im-card">
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <div className="im-card-title" style={{ fontSize: 15 }}>{w.day} — {w.muscle_group}</div>
-                <div className="im-card-sub">{fmtDateFull(w.date)}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, alignItems: "flex-start" }}>
+                <div>
+                  <div className="im-card-title" style={{ fontSize: 15 }}>{w.day} — {w.muscle_group}</div>
+                  <div className="im-card-sub">{fmtDateFull(w.date)}</div>
+                </div>
+                <button onClick={() => onEditWorkout(w)}
+                  style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 2, padding: "3px 10px", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-muted)", cursor: "pointer", fontFamily: "var(--ff-body)", flexShrink: 0 }}>
+                  Edit
+                </button>
               </div>
               {w.exercises.map((ex, i) => {
                 const topSet = [...ex.sets].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0];
@@ -1059,6 +1098,33 @@ export default function App() {
     setView("log");
   }
 
+  function editWorkout(w) {
+    // Normalize stored workout into activeWorkout shape
+    setActiveWorkout({
+      id: w.id,
+      date: w.date,
+      day: w.day,
+      muscleGroup: w.muscle_group,
+      notes: w.notes || "",
+      exercises: w.exercises.map(ex => ({
+        name: ex.name,
+        recWeight: ex.recWeight || Math.max(...(ex.sets || []).map(s => parseFloat(s.weight) || 0), 0),
+        sets: ex.sets || [],
+      })),
+    });
+    setView("log");
+  }
+
+  function editWorkout(w) {
+    // Load existing workout into log view for editing
+    setActiveWorkout({
+      id: w.id, date: w.date, day: w.day,
+      muscleGroup: w.muscle_group, notes: w.notes || "",
+      exercises: w.exercises,
+    });
+    setView("log");
+  }
+
   async function saveWorkout(wkt) {
     const { error } = await supabase.from("workouts").upsert({
       id: wkt.id, date: wkt.date, day: wkt.day,
@@ -1095,9 +1161,9 @@ export default function App() {
     <>
       <style>{GLOBAL_CSS}</style>
       <div className="im-app">
-        {view === "home" && <HomeView workouts={workouts} measurements={measurements} onStartWorkout={startWorkout} />}
+        {view === "home" && <HomeView workouts={workouts} measurements={measurements} onStartWorkout={startWorkout} onEditWorkout={editWorkout} />}
         {view === "log" && <LogView activeWorkout={activeWorkout} workouts={workouts} onSave={saveWorkout} onDiscard={discardWorkout} timer={timer} />}
-        {view === "progress" && <ProgressView workouts={workouts} />}
+        {view === "progress" && <ProgressView workouts={workouts} onEditWorkout={editWorkout} />}
         {view === "body" && <BodyView measurements={measurements} measurementFields={measurementFields} setMeasurements={setMeasurements} setMeasurementFields={setMeasurementFields} />}
 
         <nav className="im-nav">
