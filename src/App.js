@@ -705,9 +705,10 @@ function HomeView({ workouts, measurements, onStartWorkout, onEditWorkout }) {
 }
 
 // ─── PROGRESS VIEW ────────────────────────────────────────────────────────────
-function ProgressView({ workouts, onEditWorkout }) {
+function ProgressView({ workouts, onEditWorkout, onDeleteWorkout }) {
   const [selectedLift, setSelectedLift] = useState("Barbell Bench Press");
   const [selectedMuscle, setSelectedMuscle] = useState("Chest");
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const tooltipStyle = { background: "var(--parchment-dark)", border: "1px solid var(--border)", fontSize: 11, color: "var(--espresso)", fontFamily: "Lora", borderRadius: 2 };
 
@@ -835,11 +836,32 @@ function ProgressView({ workouts, onEditWorkout }) {
                   <div className="im-card-title" style={{ fontSize: 15 }}>{w.day} — {w.muscle_group}</div>
                   <div className="im-card-sub">{fmtDateFull(w.date)}</div>
                 </div>
-                <button onClick={() => onEditWorkout(w)}
-                  style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 2, padding: "3px 10px", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-muted)", cursor: "pointer", fontFamily: "var(--ff-body)", flexShrink: 0 }}>
-                  Edit
-                </button>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                  <button onClick={() => onEditWorkout(w)}
+                    style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 2, padding: "3px 10px", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-muted)", cursor: "pointer", fontFamily: "var(--ff-body)" }}>
+                    Edit
+                  </button>
+                  <button onClick={() => setConfirmDeleteId(w.id)}
+                    style={{ background: "transparent", border: "1px solid var(--danger)", borderRadius: 2, padding: "3px 10px", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: "var(--danger)", cursor: "pointer", fontFamily: "var(--ff-body)" }}>
+                    Delete
+                  </button>
+                </div>
               </div>
+              {confirmDeleteId === w.id && (
+                <div style={{ background: "rgba(138,48,32,0.08)", border: "1px solid var(--danger)", borderRadius: 2, padding: "10px 12px", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 11, color: "var(--danger)" }}>Delete this session permanently?</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => setConfirmDeleteId(null)}
+                      style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 2, padding: "4px 10px", fontSize: 9, color: "var(--text-muted)", cursor: "pointer", fontFamily: "var(--ff-body)" }}>
+                      Cancel
+                    </button>
+                    <button onClick={() => { onDeleteWorkout(w.id); setConfirmDeleteId(null); }}
+                      style={{ background: "var(--danger)", border: "none", borderRadius: 2, padding: "4px 10px", fontSize: 9, color: "var(--parchment)", cursor: "pointer", fontFamily: "var(--ff-body)", letterSpacing: 1 }}>
+                      Yes, Delete
+                    </button>
+                  </div>
+                </div>
+              )}
               {w.exercises.map((ex, i) => {
                 const topSet = [...ex.sets].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0];
                 const orm = topSet ? calc1RM(parseFloat(topSet.weight) || 0, parseInt(topSet.reps) || 1) : null;
@@ -866,7 +888,190 @@ function ProgressView({ workouts, onEditWorkout }) {
   );
 }
 
-// ─── BODY VIEW ────────────────────────────────────────────────────────────────
+// ─── CALENDAR VIEW ────────────────────────────────────────────────────────────
+function CalendarView({ workouts, onEditWorkout }) {
+  const [displayDate, setDisplayDate] = useState(new Date());
+
+  const year = displayDate.getFullYear();
+  const month = displayDate.getMonth();
+  const monthName = displayDate.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+
+  const firstDay = new Date(year, month, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // Map workout dates to lookup
+  const workoutMap = {};
+  workouts.forEach(w => {
+    if (!workoutMap[w.date]) workoutMap[w.date] = [];
+    workoutMap[w.date].push(w);
+  });
+
+  const muscleColors = {
+    Chest: "#b5762a", Back: "#4a3728", Legs: "#5a7a3a",
+    Shoulders: "#7a5a8a", Arms: "#8a4a2a", Core: "#4a6a7a",
+  };
+
+  function dateStr(d) {
+    return `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  }
+
+  const today = todayStr();
+  const cells = [];
+  // Empty cells before first day
+  for (let i = 0; i < firstDay; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  const [selectedDay, setSelectedDay] = useState(null);
+  const selectedWorkouts = selectedDay ? (workoutMap[dateStr(selectedDay)] || []) : [];
+
+  return (
+    <div>
+      <div className="im-header">
+        <div className="im-header-row">
+          <div>
+            <div className="im-logo">Workout <span className="im-logo-accent">History</span></div>
+            <div className="im-tagline">Calendar view</div>
+          </div>
+        </div>
+      </div>
+      <div className="im-body">
+        {/* Month navigation */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <button onClick={() => setDisplayDate(new Date(year, month - 1, 1))}
+            style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 2, padding: "6px 14px", fontSize: 16, color: "var(--text-muted)", cursor: "pointer" }}>‹</button>
+          <div style={{ fontFamily: "var(--ff-display)", fontSize: 18, fontWeight: 700, color: "var(--espresso)" }}>{monthName}</div>
+          <button onClick={() => setDisplayDate(new Date(year, month + 1, 1))}
+            style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 2, padding: "6px 14px", fontSize: 16, color: "var(--text-muted)", cursor: "pointer" }}>›</button>
+        </div>
+
+        {/* Day of week headers */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 3 }}>
+          {["Su","Mo","Tu","We","Th","Fr","Sa"].map(d => (
+            <div key={d} style={{ textAlign: "center", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-muted)", padding: "4px 0" }}>{d}</div>
+          ))}
+        </div>
+
+        {/* Calendar grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 3, marginBottom: 20 }}>
+          {cells.map((d, i) => {
+            if (!d) return <div key={`e${i}`} />;
+            const ds = dateStr(d);
+            const wkts = workoutMap[ds] || [];
+            const isToday = ds === today;
+            const isSelected = selectedDay === d;
+            const hasWorkout = wkts.length > 0;
+            const muscle = wkts[0]?.muscle_group;
+            const dotColor = muscleColors[muscle] || "var(--copper)";
+
+            return (
+              <div key={d}
+                onClick={() => setSelectedDay(isSelected ? null : d)}
+                style={{
+                  aspectRatio: "1",
+                  borderRadius: 3,
+                  border: isSelected ? "2px solid var(--copper)" : isToday ? "2px solid var(--espresso)" : "1px solid var(--border-light)",
+                  background: hasWorkout ? "var(--parchment-dark)" : "transparent",
+                  cursor: hasWorkout ? "pointer" : "default",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "4px 2px",
+                  position: "relative",
+                }}>
+                <div style={{ fontSize: 12, fontWeight: isToday ? 700 : 400, color: isToday ? "var(--espresso)" : hasWorkout ? "var(--espresso-mid)" : "var(--text-muted)" }}>{d}</div>
+                {hasWorkout && (
+                  <div style={{ display: "flex", gap: 2, marginTop: 2 }}>
+                    {wkts.slice(0, 2).map((_, wi) => (
+                      <div key={wi} style={{ width: 5, height: 5, borderRadius: "50%", background: dotColor }} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+          {Object.entries(muscleColors).map(([muscle, color]) => (
+            <div key={muscle} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: color }} />
+              <span style={{ fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-muted)" }}>{muscle}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Selected day detail */}
+        {selectedDay && (
+          <div className="im-section">
+            <div className="im-section-title">{fmtDateFull(dateStr(selectedDay))}</div>
+            {selectedWorkouts.length === 0 ? (
+              <div style={{ fontSize: 12, color: "var(--text-muted)", fontStyle: "italic" }}>No sessions logged.</div>
+            ) : selectedWorkouts.map(w => (
+              <div key={w.id} className="im-card-accent">
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                  <div>
+                    <div className="im-card-title">{w.day} — {w.muscle_group}</div>
+                    <div className="im-card-sub">{w.exercises.length} exercises · {w.exercises.reduce((a, e) => a + e.sets.length, 0)} sets</div>
+                  </div>
+                  <button onClick={() => onEditWorkout(w)}
+                    style={{ background: "transparent", border: "1px solid var(--border)", borderRadius: 2, padding: "3px 10px", fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: "var(--text-muted)", cursor: "pointer", fontFamily: "var(--ff-body)" }}>
+                    Edit
+                  </button>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {w.exercises.map((ex, i) => {
+                    const topSet = [...ex.sets].sort((a, b) => (b.weight || 0) - (a.weight || 0))[0];
+                    const orm = topSet ? calc1RM(parseFloat(topSet.weight) || 0, parseInt(topSet.reps) || 1) : null;
+                    return (
+                      <div key={i} style={{ background: "var(--parchment)", border: "1px solid var(--border)", borderRadius: 2, padding: "4px 10px", marginBottom: 4 }}>
+                        <div style={{ fontSize: 10, color: "var(--espresso-mid)", fontWeight: 600 }}>{ex.name}</div>
+                        <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 1 }}>
+                          {ex.sets.length} sets{orm ? ` · 1RM ~${orm}lb` : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                {w.notes && <div style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic", marginTop: 8 }}>"{w.notes}"</div>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Monthly summary stats */}
+        <div className="im-section">
+          <div className="im-section-title">This Month</div>
+          {(() => {
+            const monthPrefix = `${year}-${String(month + 1).padStart(2, "0")}`;
+            const monthWorkouts = workouts.filter(w => w.date.startsWith(monthPrefix));
+            const totalSets = monthWorkouts.reduce((a, w) => a + w.exercises.reduce((b, e) => b + e.sets.length, 0), 0);
+            const muscles = [...new Set(monthWorkouts.map(w => w.muscle_group))];
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                <div className="im-stat">
+                  <div className="im-stat-val">{monthWorkouts.length}</div>
+                  <div className="im-stat-label">Sessions</div>
+                </div>
+                <div className="im-stat">
+                  <div className="im-stat-val">{totalSets}</div>
+                  <div className="im-stat-label">Total Sets</div>
+                </div>
+                <div className="im-stat">
+                  <div className="im-stat-val">{muscles.length}</div>
+                  <div className="im-stat-label">Muscles Hit</div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function BodyView({ measurements, measurementFields, setMeasurements, setMeasurementFields }) {
   const [showForm, setShowForm] = useState(false);
   const [showAddField, setShowAddField] = useState(false);
@@ -1141,6 +1346,11 @@ export default function App() {
     setView("home");
   }
 
+  async function deleteWorkout(id) {
+    await supabase.from("workouts").delete().eq("id", id);
+    setWorkouts(prev => prev.filter(w => w.id !== id));
+  }
+
   function discardWorkout() {
     setActiveWorkout(null);
     setView("home");
@@ -1163,15 +1373,17 @@ export default function App() {
       <div className="im-app">
         {view === "home" && <HomeView workouts={workouts} measurements={measurements} onStartWorkout={startWorkout} onEditWorkout={editWorkout} />}
         {view === "log" && <LogView activeWorkout={activeWorkout} workouts={workouts} onSave={saveWorkout} onDiscard={discardWorkout} timer={timer} />}
-        {view === "progress" && <ProgressView workouts={workouts} onEditWorkout={editWorkout} />}
+        {view === "progress" && <ProgressView workouts={workouts} onEditWorkout={editWorkout} onDeleteWorkout={deleteWorkout} />}
+        {view === "calendar" && <CalendarView workouts={workouts} onEditWorkout={editWorkout} />}
         {view === "body" && <BodyView measurements={measurements} measurementFields={measurementFields} setMeasurements={setMeasurements} setMeasurementFields={setMeasurementFields} />}
 
         <nav className="im-nav">
           {[
-            { id: "home", icon: "⌂", label: "Home" },
-            { id: "log", icon: "✦", label: "Log" },
+            { id: "home",     icon: "⌂", label: "Home" },
+            { id: "log",      icon: "✦", label: "Log" },
+            { id: "calendar", icon: "◫", label: "History" },
             { id: "progress", icon: "↗", label: "Progress" },
-            { id: "body", icon: "◎", label: "Body" },
+            { id: "body",     icon: "◎", label: "Body" },
           ].map(n => (
             <button key={n.id} className={`im-nav-btn${view === n.id ? " active" : ""}`} onClick={() => setView(n.id)}>
               <span className="im-nav-icon">{n.icon}</span>
